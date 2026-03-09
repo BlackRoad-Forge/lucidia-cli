@@ -1,0 +1,253 @@
+#!/bin/zsh
+# LUCIDIA — Sovereign Coding CLI
+# BlackRoad OS, Inc. — Alexa Louise Amundson
+# Runs on YOUR hardware. YOUR model. No dependencies. No login. No cloud.
+
+# Endpoint fallback chain: local → Lucidia Pi (LAN) → Lucidia Pi (Tailscale) → Cecilia
+OLLAMA_ENDPOINTS=(
+  "http://localhost:11434"
+  "http://192.168.4.38:11434"
+  "http://100.66.235.47:11434"
+  "http://192.168.4.96:11434"
+)
+OLLAMA=""
+MODEL="${LUCIDIA_MODEL:-llama3.2}"
+BLACKROAD="\033[0;35m"
+GREEN="\033[0;32m"
+CYAN="\033[0;36m"
+RED="\033[0;31m"
+DIM="\033[2m"
+NC="\033[0m"
+BOLD="\033[1m"
+
+banner() {
+  echo ""
+  echo -e "${BLACKROAD}${BOLD}  ██╗     ██╗   ██╗ ██████╗██╗██████╗ ██╗ █████╗ ${NC}"
+  echo -e "${BLACKROAD}${BOLD}  ██║     ██║   ██║██╔════╝██║██╔══██╗██║██╔══██╗${NC}"
+  echo -e "${BLACKROAD}${BOLD}  ██║     ██║   ██║██║     ██║██║  ██║██║███████║${NC}"
+  echo -e "${BLACKROAD}${BOLD}  ██║     ██║   ██║██║     ██║██║  ██║██║██╔══██║${NC}"
+  echo -e "${BLACKROAD}${BOLD}  ███████╗╚██████╔╝╚██████╗██║██████╔╝██║██║  ██║${NC}"
+  echo -e "${BLACKROAD}${BOLD}  ╚══════╝ ╚═════╝  ╚═════╝╚═╝╚═════╝ ╚═╝╚═╝  ╚═╝${NC}"
+  echo ""
+  echo -e "  ${DIM}BlackRoad OS, Inc. — Alexa Louise Amundson${NC}"
+  echo -e "  ${DIM}Sovereign. Local. Yours.${NC}"
+  echo -e "  ${DIM}Model: ${MODEL} @ ${OLLAMA}${NC}"
+  echo ""
+}
+
+find_ollama() {
+  # Use explicit override if set
+  if [[ -n "$OLLAMA_HOST" ]]; then
+    OLLAMA="$OLLAMA_HOST"
+    return 0
+  fi
+  # Try each endpoint in order
+  for endpoint in "${OLLAMA_ENDPOINTS[@]}"; do
+    if curl -s --connect-timeout 2 "${endpoint}/api/tags" > /dev/null 2>&1; then
+      OLLAMA="$endpoint"
+      return 0
+    fi
+  done
+  return 1
+}
+
+check_ollama() {
+  if [[ -n "$OLLAMA" ]]; then
+    return 0
+  fi
+  if find_ollama; then
+    return 0
+  fi
+  # Try starting local Ollama
+  echo -e "${CYAN}  Searching for Ollama...${NC}"
+  if command -v ollama &>/dev/null; then
+    echo -e "${CYAN}  Starting local: ollama serve &${NC}"
+    ollama serve > /tmp/ollama.log 2>&1 &
+    sleep 2
+    if find_ollama; then
+      echo -e "${GREEN}  ✓ Connected: ${OLLAMA}${NC}"
+      return 0
+    fi
+  fi
+  echo -e "${RED}  ✗ No Ollama found. Tried:${NC}"
+  for endpoint in "${OLLAMA_ENDPOINTS[@]}"; do
+    echo -e "${DIM}    → ${endpoint}${NC}"
+  done
+  echo -e "${CYAN}  Set OLLAMA_HOST=http://host:11434 or start ollama serve${NC}"
+  return 1
+}
+
+ask() {
+  local prompt="$1"
+  local system="${2:-You are LUCIDIA, a sovereign coding assistant running on BlackRoad OS, Inc. hardware owned by Alexa Louise Amundson. You write code. You answer questions. You owe nothing to any corporation.}"
+
+  curl -s -X POST "${OLLAMA}/api/generate" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"model\": \"${MODEL}\",
+      \"prompt\": $(printf '%s' "$prompt" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
+      \"system\": $(printf '%s' "$system" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
+      \"stream\": true
+    }" 2>/dev/null | python3 -c '
+import sys, json
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        d = json.loads(line)
+        r = d.get("response", "")
+        print(r, end="", flush=True)
+        if d.get("done"):
+            break
+    except:
+        pass
+print()
+'
+}
+
+chat() {
+  check_ollama || exit 1
+  banner
+  echo -e "${GREEN}  LUCIDIA is listening. Type 'exit' to quit.${NC}"
+  echo ""
+
+  while true; do
+    echo -ne "${CYAN}  you → ${NC}"
+    read -r input
+    [[ "$input" == "exit" || "$input" == "quit" || -z "$input" && $? -ne 0 ]] && break
+    [[ -z "$input" ]] && continue
+    echo ""
+    echo -ne "${BLACKROAD}  lucidia → ${NC}"
+    ask "$input"
+    echo ""
+  done
+  echo -e "${DIM}  session closed.${NC}"
+}
+
+explain() {
+  check_ollama || exit 1
+  local file="$1"
+  [[ ! -f "$file" ]] && echo -e "${RED}  ✗ File not found: $file${NC}" && exit 1
+  local content=$(cat "$file")
+  echo -ne "${BLACKROAD}  lucidia → ${NC}"
+  ask "Explain this code clearly and concisely:\n\n${content}"
+  echo ""
+}
+
+review() {
+  check_ollama || exit 1
+  local file="$1"
+  [[ ! -f "$file" ]] && echo -e "${RED}  ✗ File not found: $file${NC}" && exit 1
+  local content=$(cat "$file")
+  echo -ne "${BLACKROAD}  lucidia → ${NC}"
+  ask "Review this code. Find bugs, security issues, and improvements:\n\n${content}"
+  echo ""
+}
+
+fix() {
+  check_ollama || exit 1
+  local file="$1"
+  [[ ! -f "$file" ]] && echo -e "${RED}  ✗ File not found: $file${NC}" && exit 1
+  local content=$(cat "$file")
+  echo -ne "${BLACKROAD}  lucidia → ${NC}"
+  ask "Fix the bugs in this code. Return only the corrected code:\n\n${content}"
+  echo ""
+}
+
+write_code() {
+  check_ollama || exit 1
+  echo -ne "${BLACKROAD}  lucidia → ${NC}"
+  ask "Write code for: $*. Return only the code, no explanation."
+  echo ""
+}
+
+copilot() {
+  check_ollama || exit 1
+  local file="$1"
+  [[ ! -f "$file" ]] && echo -e "${RED}  ✗ File not found: $file${NC}" && exit 1
+  local content=$(cat "$file")
+  echo -ne "${BLACKROAD}  lucidia → ${NC}"
+  ask "You are a code copilot. Complete or continue this code. Return ONLY the completed code, preserving existing code and adding what comes next:\n\n${content}" \
+      "You are LUCIDIA copilot mode. You complete code intelligently. Output only code. No explanations. No markdown fences."
+  echo ""
+}
+
+suggest() {
+  check_ollama || exit 1
+  local file="$1"
+  [[ ! -f "$file" ]] && echo -e "${RED}  ✗ File not found: $file${NC}" && exit 1
+  local content=$(cat "$file")
+  echo -ne "${BLACKROAD}  lucidia → ${NC}"
+  ask "Analyze this code and suggest the next 5-10 lines that should be written. Return ONLY the suggested code:\n\n${content}" \
+      "You are LUCIDIA copilot. You predict what code comes next. Output only code suggestions. No explanations."
+  echo ""
+}
+
+models() {
+  check_ollama || exit 1
+  echo ""
+  echo -e "${CYAN}  Available models @ ${OLLAMA}:${NC}"
+  curl -s "${OLLAMA}/api/tags" 2>/dev/null | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+for m in sorted(d.get("models", []), key=lambda x: x["name"]):
+    name = m["name"]
+    size = m.get("size", 0)
+    gb = size / (1024**3)
+    print(f"  → {name} ({gb:.1f}GB)")
+' 2>/dev/null
+  echo ""
+}
+
+status() {
+  echo ""
+  echo -e "${CYAN}  LUCIDIA Status${NC}"
+  echo -e "${DIM}  ─────────────────────────────────${NC}"
+  for endpoint in "${OLLAMA_ENDPOINTS[@]}"; do
+    if curl -s --connect-timeout 2 "${endpoint}/api/tags" > /dev/null 2>&1; then
+      local count=$(curl -s --connect-timeout 2 "${endpoint}/api/tags" 2>/dev/null | python3 -c 'import json,sys; print(len(json.load(sys.stdin).get("models",[])))' 2>/dev/null)
+      echo -e "  ${GREEN}✓${NC} ${endpoint} — ${count} models"
+    else
+      echo -e "  ${RED}✗${NC} ${endpoint} — offline"
+    fi
+  done
+  echo -e "${DIM}  ─────────────────────────────────${NC}"
+  echo -e "  ${DIM}Active model: ${MODEL}${NC}"
+  echo ""
+}
+
+help() {
+  banner
+  echo -e "${BOLD}  COMMANDS${NC}"
+  echo ""
+  echo -e "  ${CYAN}lucidia${NC}                      interactive chat"
+  echo -e "  ${CYAN}lucidia ask <question>${NC}       ask anything"
+  echo -e "  ${CYAN}lucidia explain <file>${NC}       explain code"
+  echo -e "  ${CYAN}lucidia review <file>${NC}        review code"
+  echo -e "  ${CYAN}lucidia fix <file>${NC}           fix bugs"
+  echo -e "  ${CYAN}lucidia write <description>${NC}  write code"
+  echo -e "  ${CYAN}lucidia copilot <file>${NC}       complete/continue code"
+  echo -e "  ${CYAN}lucidia suggest <file>${NC}       predict next lines"
+  echo -e "  ${CYAN}lucidia models${NC}               list available models"
+  echo -e "  ${CYAN}lucidia status${NC}               check all endpoints"
+  echo ""
+  echo -e "  ${DIM}LUCIDIA_MODEL=mistral lucidia  — use a different model${NC}"
+  echo -e "  ${DIM}OLLAMA_HOST=http://host:11434  — use a specific endpoint${NC}"
+  echo ""
+}
+
+case "$1" in
+  chat|"")    chat ;;
+  ask)        shift; check_ollama && echo -ne "${BLACKROAD}  lucidia → ${NC}" && ask "$*" && echo "" ;;
+  explain)    explain "$2" ;;
+  review)     review "$2" ;;
+  fix)        fix "$2" ;;
+  write)      shift; write_code "$*" ;;
+  copilot)    copilot "$2" ;;
+  suggest)    suggest "$2" ;;
+  models)     models ;;
+  status)     status ;;
+  help|--help|-h) help ;;
+  *)          check_ollama && echo -ne "${BLACKROAD}  lucidia → ${NC}" && ask "$*" && echo "" ;;
+esac
