@@ -1,78 +1,76 @@
-# LUCIDIA CLI
+# Lucidia CLI
 
-> A whole computer in a computer, and a whole web engine.
-> ⬥ BlackRoad OS, Inc.
+[![CI](https://github.com/blackboxprogramming/lucidia-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/blackboxprogramming/lucidia-cli/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-3776AB.svg)](https://python.org)
+[![License](https://img.shields.io/badge/license-Proprietary-9c27b0)](LICENSE)
 
-## Structure
-```
-lucidia-cli/
-├── lucidia.py              # Main TUI app
-├── components/
-│   ├── __init__.py         # Package exports
-│   ├── web_engine.py       # Terminal web browser
-│   ├── virtual_fs.py       # Sandboxed filesystem
-│   ├── agents.py           # Ollama AI agents
-│   ├── apps.py             # Mini applications
-│   └── process_mgr.py      # Background tasks
-├── config/
-│   └── settings.json       # User settings
-└── README.md
-```
+A terminal operating system built on Textual and Rich. Multi-tab TUI with a web browser, sandboxed filesystem, AI agents, mini applications, and background process management.
 
 ## Components
 
-### Web Engine (`web_engine.py`)
-- HTML to Rich markup parser
-- Link extraction and following
-- History navigation
-- DuckDuckGo search
+### Web Engine
+Terminal web browser with HTML-to-Rich markup parser, link extraction and navigation, browsing history, and DuckDuckGo search integration.
 
-### Virtual FS (`virtual_fs.py`)
-- Sandboxed at `~/.lucidia/vfs`
-- Standard operations: ls, cd, cat, write, mkdir, rm
-- Persistent across sessions
+### Virtual Filesystem
+Sandboxed at `~/.lucidia/vfs`. Standard operations: `ls`, `cd`, `cat`, `write`, `mkdir`, `rm`. Persistent across sessions.
 
-### Agents (`agents.py`)
-- Ollama-powered AI agents
-- Personalities: lucidia, alice, octavia, cece, operator
-- Council mode for multi-agent discussion
+### AI Agents
+Ollama-powered agents with distinct personalities: lucidia, alice, octavia, cece, operator. Council mode runs multi-agent discussions where agents debate and synthesize answers.
 
-### Apps (`apps.py`)
-- calc: Safe calculator
-- btc/eth: Crypto prices
-- fortune: Random wisdom
-- weather: wttr.in integration
-- time/date/unix: Clock utilities
-- whoami/neofetch: System info
+### Mini Apps
+- `calc` -- safe expression evaluator
+- `btc` / `eth` -- live crypto prices
+- `weather` -- wttr.in integration
+- `fortune` -- random wisdom
+- `time` / `date` / `unix` -- clock utilities
+- `whoami` / `neofetch` -- system info
 
-### Process Manager (`process_mgr.py`)
-- Async task spawning
-- PID tracking
-- ps/kill commands
+### Process Manager
+Async background task spawning with PID tracking. `ps` to list, `kill` to stop.
+
+## Architecture
+
+```
+lucidia.py (main TUI)
+    |
+    +-- components/
+    |       web_engine.py     HTML parser + browser
+    |       virtual_fs.py     Sandboxed filesystem
+    |       agents.py         Ollama AI integration
+    |       apps.py           Calculator, crypto, weather
+    |       process_mgr.py    Background task manager
+    |
+    +-- config/
+            settings.json     User preferences
+```
 
 ## Keybindings
 
-| Key | Tab |
-|-----|-----|
+| Key | Action |
+|-----|--------|
 | Ctrl+1 | Shell |
-| Ctrl+2 | Web |
+| Ctrl+2 | Web browser |
 | Ctrl+3 | Files |
-| Ctrl+4 | Agents |
+| Ctrl+4 | AI Agents |
 | Ctrl+5 | Apps |
 | Ctrl+Q | Quit |
 
-## Run
+## Install and Run
+
 ```bash
-cd ~/lucidia-cli
+pip install textual rich
 python lucidia.py
 ```
 
-## Dependencies
+For AI agents, Ollama must be running locally.
+
+## Development
+
 ```bash
-pip install textual rich
-# Ollama running locally for agents
+pip install -r requirements.txt
+pytest tests/ -v
 ```
 
----
+## License
 
-*"The road is black, but the way is clear."*
+Proprietary -- BlackRoad OS, Inc.
